@@ -52,6 +52,13 @@ def hash_password(password: str, salt_hex: str) -> str:
     ).hex()
 
 
+def token_hash(token: str) -> str:
+    """P2-8(TASK-036)：会话 token 只存 SHA-256 哈希，不存明文。
+    token 本身是 256 位随机数，哈希不需要加盐；db 文件即使被拷走，
+    里面的值也不能直接拿来当令牌用。"""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
 def favicon_url_for(url: str) -> str:
     """<scheme>://<host>[:port]/favicon.ico, with any userinfo removed.
 
@@ -265,7 +272,7 @@ def current_user(request: Request) -> sqlite3.Row:
         row = conn.execute(
             "SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id"
             " WHERE s.token = ? AND s.expires_at > ?",
-            (token, time.time()),
+            (token_hash(token), time.time()),
         ).fetchone()
     if row is None:
         raise HTTPException(status_code=401, detail="登录已过期，请重新登录")
@@ -287,7 +294,7 @@ def login(body: LoginIn):
         token = secrets.token_urlsafe(32)
         conn.execute(
             "INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)",
-            (token, user["id"], time.time() + TOKEN_TTL_SECONDS),
+            (token_hash(token), user["id"], time.time() + TOKEN_TTL_SECONDS),
         )
     return {
         "token": token,
@@ -300,7 +307,7 @@ def login(body: LoginIn):
 def logout(request: Request, user: sqlite3.Row = Depends(current_user)):
     token = request.headers.get("Authorization", "")[len("Bearer "):].strip()
     with get_conn() as conn:
-        conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
+        conn.execute("DELETE FROM sessions WHERE token = ?", (token_hash(token),))
     return {"ok": True}
 
 
@@ -329,7 +336,7 @@ def change_password(
         )
         conn.execute(
             "DELETE FROM sessions WHERE user_id = ? AND token != ?",
-            (user["id"], current_token),
+            (user["id"], token_hash(current_token)),
         )
     return {"ok": True}
 
@@ -465,6 +472,14 @@ def validate_url(url: str) -> str:
     if any(ord(c) <= 0x20 or ord(c) == 0x7F for c in url):
         raise HTTPException(status_code=400, detail="网址含有非法字符")
     parsed = urllib.parse.urlparse(url)
+    # P2-5 子项（TASK-036）：拒绝非法端口。urlparse 对越界/非数字端口
+    # 取 .port 会抛 ValueError，一并视为非法；端口 0 同样拒绝。
+    try:
+        port = parsed.port
+    except ValueError:
+        raise HTTPException(status_code=400, detail="端口号非法")
+    if port is not None and not 1 <= port <= 65535:
+        raise HTTPException(status_code=400, detail="端口号非法")
     if parsed.scheme not in ("http", "https") or not parsed.hostname:
         raise HTTPException(status_code=400, detail="只支持 http/https 网址")
     return url

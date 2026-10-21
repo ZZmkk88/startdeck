@@ -1,7 +1,9 @@
 """Automated tests for startdeck. Run: .venv/bin/python -m pytest tests/ -q"""
+import hashlib
 import http.server
 import os
 import socket
+import sqlite3
 import tempfile
 import threading
 
@@ -373,6 +375,36 @@ def test_validate_url_rejects_control_chars():
     # 正常网址不受影响；空格的合法写法是 %20
     assert appmod.validate_url("https://example.com/a%20b") == \
         "https://example.com/a%20b"
+
+
+def test_validate_url_rejects_bad_port():
+    # P2-5 子项（TASK-036）：非法端口拒绝（越界、0、非数字）
+    for bad in (
+        "https://example.com:99999/",
+        "https://example.com:0/",
+        "https://example.com:abc/",
+        "http://[::1]:99999/",
+    ):
+        with pytest.raises(HTTPException):
+            appmod.validate_url(bad)
+    # 合法端口不受影响
+    assert appmod.validate_url("https://example.com:8443/x") == \
+        "https://example.com:8443/x"
+    assert appmod.validate_url("http://[::1]:8080/") == "http://[::1]:8080/"
+
+
+def test_session_token_stored_hashed(client):
+    # P2-8：sessions 表只存 token 的 SHA-256 哈希，不存明文
+    data = do_login(client)
+    token = data["token"]
+    conn = sqlite3.connect(os.environ["STARTDECK_DB_PATH"])
+    try:
+        stored = [r[0] for r in conn.execute("SELECT token FROM sessions")]
+    finally:
+        conn.close()
+    expect = hashlib.sha256(token.encode()).hexdigest()
+    assert expect in stored
+    assert token not in stored
 
 
 def test_search_escapes_like_wildcards(client, auth):

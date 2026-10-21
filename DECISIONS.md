@@ -76,3 +76,40 @@ pytest 20 项、live_selftest 全过；P0 无；P1 4 条修了 3 条。
 
 note：review 原文明确"首次登录只提示不强制改密是既定口径，不列为缺陷"，
 与口径第 1 条一致，本文件 38-39 行已有记录，不重复记。
+
+## 2026-10-21 · grok/TASK-036-startdeck（纯报告 review 模式）
+
+来源：Grok Build 在本地真跑后推到 `grok/TASK-036-startdeck` 分支
+（head `81835f80`）。结论：本地跑通，pytest 21 项（当时 main）、
+live_selftest 全过；P0 无、P1 无；P2 9 条未改代码。
+该分支基座是 TASK-029 之前的 main，报告里 P2-1/2/3/4/7 已被 TASK-029
+在 main 落地（`be0be991`），无需再做；剩下 3 项我方在 main 实现：
+
+- **P2-5 端口子项采纳**：`validate_url` 增加端口检查——越界（如 99999）、
+  非数字、端口 0 一律 400 拒绝（`parsed.port` 对前两者抛 ValueError，
+  一并捕获）。带回归测试。
+- **P2-6 采纳（文档）**：状态探测走服务端 urllib，默认带 `ProxyHandler`，
+  会遵循本机 `HTTP_PROXY` / `HTTPS_PROXY` 环境变量；之前 README 没写，
+  已在功能清单的状态探测条目里补一句说明。不改行为。
+- **P2-8 采纳：会话 token 哈希入库**。评估：quicklink 对同类项选了"留待后续"，
+  但 startdeck 这里决定修，理由——① db 文件可能进备份/同步盘，明文 token
+  是 24 小时有效的活凭证，哈希化是实实在在的纵深防御；② 改动收敛，
+  只动登录/鉴权/登出/改密 4 处 token 落库与查询点，对外行为不变，
+  存量测试无需改写；③ token 是 256 位随机数，SHA-256 无需加盐。
+  实现：`token_hash()` 存 SHA-256，登录存哈希、鉴权/登出/改密清会话时先哈希
+  再查库。带回归测试（断言库里只有哈希、没有明文）。
+  注意：升级后旧库里的明文会话全部失效，用户重新登录一次即可。
+
+## 2026-10-21 · grok/TASK-039-startdeck-p2（关闭，不合并）
+
+来源：`grok/TASK-039-startdeck-p2` 分支（head `869f2f82`，review+fix 名义）。
+结论：**不合并，只记档**。理由：
+
+- 基座旧：merge-base 是 `a1ecd37`，落后当前 main（`be0be991`）1 个提交，
+  是 TASK-029 落地前的旧基座导致的重复劳动。
+- 10 项"修复"与 main 的 TASK-029 实现实质重复，且 main 版更优：
+  安全头 main 用纯 ASGI 中间件（4 个头、只补缺失的不覆盖），分支用普通
+  `@app.middleware("http")`（3 个头、覆盖式写入）；哈希比对 main 用
+  `secrets.compare_digest`（口径第 8 条），分支用 `hmac.compare_digest`
+  （行为等价、无实质增量）。
+- 合进来没有增益，只有回退风险。分支不删除（留档），main 不动。
