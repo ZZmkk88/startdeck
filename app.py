@@ -6,6 +6,7 @@ Single-file FastAPI backend + SQLite + one static page.
 Design notes live in NOTES.md.
 """
 import hashlib
+import hmac
 import os
 import secrets
 import sqlite3
@@ -50,6 +51,16 @@ def hash_password(password: str, salt_hex: str) -> str:
     return hashlib.pbkdf2_hmac(
         "sha256", password.encode("utf-8"), bytes.fromhex(salt_hex), 200_000
     ).hex()
+
+
+# Same length as a real salt / sha256 hex digest. Used only so a missing
+# username still runs one pbkdf2 plus compare_digest.
+_DUMMY_SALT = "00" * 16
+_DUMMY_HASH = "0" * 64
+
+
+def password_matches(password: str, salt_hex: str, password_hash: str) -> bool:
+    return hmac.compare_digest(hash_password(password, salt_hex), password_hash)
 
 
 def favicon_url_for(url: str) -> str:
@@ -196,6 +207,15 @@ app = FastAPI(
 )
 
 
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    return response
+
+
 class LoginIn(BaseModel):
     username: str
     password: str
@@ -247,7 +267,10 @@ def login(body: LoginIn):
         user = conn.execute(
             "SELECT * FROM users WHERE username = ?", (body.username.strip(),)
         ).fetchone()
-        if user is None or hash_password(body.password, user["salt"]) != user["password_hash"]:
+        salt = user["salt"] if user is not None else _DUMMY_SALT
+        expected = user["password_hash"] if user is not None else _DUMMY_HASH
+        matched = password_matches(body.password, salt, expected)
+        if user is None or not matched:
             raise HTTPException(status_code=401, detail="用户名或密码不正确")
         token = secrets.token_urlsafe(32)
         conn.execute(
@@ -277,7 +300,7 @@ def change_password(
 ):
     if len(body.new_password) < 6:
         raise HTTPException(status_code=400, detail="新密码至少 6 位")
-    if hash_password(body.old_password, user["salt"]) != user["password_hash"]:
+    if not password_matches(body.old_password, user["salt"], user["password_hash"]):
         raise HTTPException(status_code=400, detail="旧密码不正确")
     salt = secrets.token_hex(16)
     # 密码变了，之前发出去的其他登录态必须作废，只保留当前这一次会话
@@ -422,6 +445,9 @@ def validate_url(url: str) -> str:
     url = (url or "").strip()
     if not url or len(url) > MAX_URL_LENGTH:
         raise HTTPException(status_code=400, detail="网址为空或过长")
+    # CR/LF and other controls must not reach the probe or a stored link.
+    if any(ord(ch) <= 0x20 or ord(ch) == 0x7F for ch in url):
+        raise HTTPException(status_code=400, detail="网址含有控制字符")
     parsed = urllib.parse.urlparse(url)
     if parsed.scheme not in ("http", "https") or not parsed.hostname:
         raise HTTPException(status_code=400, detail="只支持 http/https 网址")
@@ -445,6 +471,12 @@ def get_link_row(link_id: int, user_id: int) -> sqlite3.Row:
     return row
 
 
+def like_contains(raw: str) -> str:
+    """Substring pattern for SQLite LIKE, with % and _ treated as literals."""
+    escaped = raw.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
 @app.get("/api/links")
 def list_links(
     q: str = "",
@@ -457,8 +489,11 @@ def list_links(
         clauses.append("section_id = ?")
         params.append(section_id)
     if q.strip():
-        clauses.append("(name LIKE ? OR description LIKE ? OR url LIKE ?)")
-        like = f"%{q.strip()}%"
+        clauses.append(
+            "(name LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\'"
+            " OR url LIKE ? ESCAPE '\\')"
+        )
+        like = like_contains(q.strip())
         params.extend([like, like, like])
     with get_conn() as conn:
         rows = conn.execute(
