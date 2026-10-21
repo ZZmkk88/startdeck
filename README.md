@@ -23,7 +23,7 @@
 cd startdeck
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-.venv/bin/python app.py            # 默认监听 8000 端口
+.venv/bin/python app.py            # 默认只监听本机 127.0.0.1:8000
 ```
 
 **Windows（PowerShell）:**
@@ -32,7 +32,7 @@ python3 -m venv .venv
 cd startdeck
 python -m venv .venv
 .venv\Scripts\pip install -r requirements.txt
-.venv\Scripts\python app.py        # 默认监听 8000 端口
+.venv\Scripts\python app.py        # 默认只监听本机 127.0.0.1:8000
 ```
 
 启动后打开 http://localhost:8000 ，默认账号 **admin / admin123**，首次登录会提示改密码。
@@ -42,6 +42,7 @@ python -m venv .venv
 | 变量 | 说明 | 默认 |
 |---|---|---|
 | `PORT` | 监听端口（Windows PowerShell 里用 `$env:PORT=8123` 设置） | 8000 |
+| `HOST` | 监听地址。只有需要从局域网访问时才设为 `0.0.0.0` | `127.0.0.1` |
 | `STARTDECK_DB_PATH` | SQLite 数据库文件位置 | `data/startdeck.db` |
 | `SD_INITIAL_USERNAME` / `SD_INITIAL_PASSWORD` | 首次启动创建的初始账号 | admin / admin123 |
 
