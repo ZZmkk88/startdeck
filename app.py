@@ -53,13 +53,16 @@ def hash_password(password: str, salt_hex: str) -> str:
 
 
 def favicon_url_for(url: str) -> str:
-    """The icon a browser would try first: <scheme>://<host>/favicon.ico.
+    """<scheme>://<host>[:port]/favicon.ico, with any userinfo removed.
 
-    The frontend falls back to a letter tile when this image fails to
-    load, so sites without a favicon still get a placeholder.
+    The browser requests this URL by itself, so a password embedded in
+    the saved link must not be copied into it.
     """
     parsed = urllib.parse.urlparse(url)
-    return f"{parsed.scheme}://{parsed.netloc}/favicon.ico"
+    netloc = parsed.netloc
+    if "@" in netloc:
+        netloc = netloc.rsplit("@", 1)[-1]
+    return f"{parsed.scheme}://{netloc}/favicon.ico"
 
 
 # ---------------------------------------------------------------------------
@@ -182,7 +185,15 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="startdeck", lifespan=lifespan)
+# The default docs UI loads jsDelivr on this origin. The session token is in
+# localStorage, so that script could read it. The pages are off.
+app = FastAPI(
+    title="startdeck",
+    lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
 
 
 class LoginIn(BaseModel):
@@ -551,4 +562,6 @@ init_db()
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", "8000")))
+    # Loopback unless the operator opts into LAN access with HOST.
+    host = os.environ.get("HOST", "127.0.0.1")
+    uvicorn.run(app, host=host, port=int(os.environ.get("PORT", "8000")))
