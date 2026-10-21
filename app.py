@@ -185,6 +185,37 @@ async def lifespan(app: FastAPI):
     yield
 
 
+class SecurityHeadersMiddleware:
+    """P2-7(TASK-029)：补安全响应头。纯 ASGI 层做法：只改起始消息里的
+    响应头，不读取、不缓冲响应体（与 pushhub 同一做法）。"""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_with_headers(message):
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers") or [])
+                existing = {name.lower() for name, _ in headers}
+                extra = (
+                    (b"x-frame-options", b"DENY"),
+                    (b"x-content-type-options", b"nosniff"),
+                    (b"referrer-policy", b"no-referrer"),
+                    (b"content-security-policy", b"frame-ancestors 'none'"),
+                )
+                for name, value in extra:
+                    if name not in existing:
+                        headers.append((name, value))
+                message["headers"] = headers
+            await send(message)
+
+        await self.app(scope, receive, send_with_headers)
+
+
 # The default docs UI loads jsDelivr on this origin. The session token is in
 # localStorage, so that script could read it. The pages are off.
 app = FastAPI(
@@ -194,6 +225,7 @@ app = FastAPI(
     redoc_url=None,
     openapi_url=None,
 )
+app.add_middleware(SecurityHeadersMiddleware)
 
 
 class LoginIn(BaseModel):
@@ -247,7 +279,10 @@ def login(body: LoginIn):
         user = conn.execute(
             "SELECT * FROM users WHERE username = ?", (body.username.strip(),)
         ).fetchone()
-        if user is None or hash_password(body.password, user["salt"]) != user["password_hash"]:
+        # 用户名不存在也照常算一次哈希再拒绝，避免用耗时差异反推用户名是否存在；
+        # 哈希比对用 secrets.compare_digest（常量时间），防时序攻击（P2-6，口径第 8 条）。
+        candidate = hash_password(body.password, user["salt"] if user else "00" * 16)
+        if user is None or not secrets.compare_digest(candidate, user["password_hash"]):
             raise HTTPException(status_code=401, detail="用户名或密码不正确")
         token = secrets.token_urlsafe(32)
         conn.execute(
@@ -277,7 +312,10 @@ def change_password(
 ):
     if len(body.new_password) < 6:
         raise HTTPException(status_code=400, detail="新密码至少 6 位")
-    if hash_password(body.old_password, user["salt"]) != user["password_hash"]:
+    # P2-6：旧密码哈希同样用常量时间比对（口径第 8 条）。
+    if not secrets.compare_digest(
+        hash_password(body.old_password, user["salt"]), user["password_hash"]
+    ):
         raise HTTPException(status_code=400, detail="旧密码不正确")
     salt = secrets.token_hex(16)
     # 密码变了，之前发出去的其他登录态必须作废，只保留当前这一次会话
@@ -422,6 +460,10 @@ def validate_url(url: str) -> str:
     url = (url or "").strip()
     if not url or len(url) > MAX_URL_LENGTH:
         raise HTTPException(status_code=400, detail="网址为空或过长")
+    # P2-5：拒绝控制字符（\x00-\x20、\x7f），防请求头注入与解析歧义。
+    # 网址里的空格请写成 %20。
+    if any(ord(c) <= 0x20 or ord(c) == 0x7F for c in url):
+        raise HTTPException(status_code=400, detail="网址含有非法字符")
     parsed = urllib.parse.urlparse(url)
     if parsed.scheme not in ("http", "https") or not parsed.hostname:
         raise HTTPException(status_code=400, detail="只支持 http/https 网址")
@@ -445,6 +487,12 @@ def get_link_row(link_id: int, user_id: int) -> sqlite3.Row:
     return row
 
 
+def escape_like(s: str) -> str:
+    """P2-10：把用户输入里的 LIKE 通配符（%、_）及转义符本身转义，
+    让搜索只做字面匹配。调用处配合 SQL 的 ESCAPE '\\' 使用。"""
+    return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 @app.get("/api/links")
 def list_links(
     q: str = "",
@@ -457,8 +505,11 @@ def list_links(
         clauses.append("section_id = ?")
         params.append(section_id)
     if q.strip():
-        clauses.append("(name LIKE ? OR description LIKE ? OR url LIKE ?)")
-        like = f"%{q.strip()}%"
+        clauses.append(
+            "(name LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\'"
+            " OR url LIKE ? ESCAPE '\\')"
+        )
+        like = f"%{escape_like(q.strip())}%"
         params.extend([like, like, like])
     with get_conn() as conn:
         rows = conn.execute(

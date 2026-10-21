@@ -13,6 +13,7 @@ os.environ["SD_INITIAL_USERNAME"] = "admin"
 os.environ["SD_INITIAL_PASSWORD"] = "admin123"
 
 import app as appmod  # noqa: E402
+from fastapi import HTTPException  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 
@@ -346,3 +347,56 @@ def test_favicon_url_unit():
         "https://sub.example.com:8443/favicon.ico"
     assert appmod.favicon_url_for("http://192.168.1.1/admin") == \
         "http://192.168.1.1/favicon.ico"
+
+
+# ------------------------------------------- TASK-029 review follow-ups ----
+
+def test_login_unknown_user_rejected(client):
+    # P2-6：不存在的用户名也走同样的 401 拒绝路径（内部照常算一次哈希，
+    # 避免用耗时差异反推用户名是否存在）
+    res = client.post("/api/login", json={"username": "nobody", "password": "x"})
+    assert res.status_code == 401
+
+
+def test_validate_url_rejects_control_chars():
+    # P2-5：控制字符（\x00-\x20、\x7f）一律拒绝
+    for bad in (
+        "https://example.com/a\rb",
+        "https://example.com/a\nb",
+        "https://example.com/a\tb",
+        "https://example.com/\x00",
+        "https://example.com/\x7f",
+        "https://exa mple.com/",
+    ):
+        with pytest.raises(HTTPException):
+            appmod.validate_url(bad)
+    # 正常网址不受影响；空格的合法写法是 %20
+    assert appmod.validate_url("https://example.com/a%20b") == \
+        "https://example.com/a%20b"
+
+
+def test_search_escapes_like_wildcards(client, auth):
+    # P2-10：% 和 _ 只做字面匹配，不当通配符用
+    s = mk_section(client, auth, "通配符组")
+    mk_link(client, auth, s["id"], "100%覆盖", "https://pct.example.com/")
+    mk_link(client, auth, s["id"], "100X覆盖", "https://other.example.com/")
+    mk_link(client, auth, s["id"], "a_b", "https://u1.example.com/")
+    mk_link(client, auth, s["id"], "axb", "https://u2.example.com/")
+    pct = client.get("/api/links", params={"q": "100%"}, headers=auth).json()
+    assert [l["name"] for l in pct] == ["100%覆盖"]
+    under = client.get("/api/links", params={"q": "a_b"}, headers=auth).json()
+    assert [l["name"] for l in under] == ["a_b"]
+
+
+def test_security_headers_present(client):
+    # P2-7：安全响应头（与 pushhub 同一套）
+    res = client.get("/")
+    assert res.status_code == 200
+    assert res.headers["x-content-type-options"] == "nosniff"
+    assert res.headers["x-frame-options"] == "DENY"
+    assert res.headers["referrer-policy"] == "no-referrer"
+    assert res.headers["content-security-policy"] == "frame-ancestors 'none'"
+    # API 的 404 也带头
+    res = client.get("/api/no-such-route")
+    assert res.status_code == 404
+    assert res.headers["x-content-type-options"] == "nosniff"

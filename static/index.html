@@ -262,6 +262,7 @@ $("pwSaveBtn").addEventListener("click", async () => {
     });
     $("pwMsg").textContent = "已修改，下次登录用新密码。";
     $("pwForm").classList.add("hidden");
+    $("pwBanner").classList.add("hidden");  // P2-9：改密成功，提示横幅立即收起
   } catch (err) { $("pwMsg").textContent = err.message; }
 });
 
@@ -356,7 +357,7 @@ function cardEl(link) {
     <div class="host">${esc(hostOf(link.url))}</div>
     <div class="status">${statusHtml(link)}</div>
     <div class="ops">
-      <a class="open" href="${esc(link.url)}" target="_blank" rel="noopener">打开</a>
+      <a class="open" href="${esc(link.url)}" target="_blank" rel="noopener noreferrer">打开</a>
       <button class="mini" data-act="check">探测</button>
       <button class="mini" data-act="edit">编辑</button>
       <button class="mini del" data-act="del">删除</button>
@@ -364,12 +365,14 @@ function cardEl(link) {
   const tile = card.querySelector(".tile");
   if (link.icon_url) {
     const img = document.createElement("img");
+    const letter = tile.querySelector(".letter");
     img.alt = ""; img.loading = "lazy";
-    img.addEventListener("error", () => img.remove());  // 取不到图标就留首字占位
+    // P2-1：取不到图标时删掉图片、把首字占位显示回来；加载成功首字才退场
+    img.addEventListener("error", () => { img.remove(); letter?.classList.remove("hidden"); });
+    img.addEventListener("load", () => letter?.remove());
     img.src = link.icon_url;
     tile.appendChild(img);
-    tile.querySelector(".letter").classList.add("hidden");
-    img.addEventListener("load", () => tile.querySelector(".letter")?.remove());
+    letter?.classList.add("hidden");
   }
   card.querySelector('[data-act="check"]').addEventListener("click", () => runCheckOne(link.id));
   card.querySelector('[data-act="edit"]').addEventListener("click", () => openLinkModal(link));
