@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>startdeck · 个人起始页</title>
+<style>
+  :root{
+    --bg:#0e1526; --bg2:#131e36; --panel:#182747; --panel2:#1e3054;
+    --line:#2b3f68; --ink:#e8eefb; --ink-soft:#93a5c9; --accent:#f5b942;
+    --accent-ink:#1a1405; --ok:#3ddc84; --bad:#ff6b6b; --unknown:#5c6f96;
+    --danger:#ff6b6b;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+       background:var(--bg);color:var(--ink)}
+  button{cursor:pointer;font:inherit}
+  input,textarea,select{font:inherit;color:var(--ink)}
+  .hidden{display:none !important}
+
+  /* ---------- top bar ---------- */
+  header{position:sticky;top:0;z-index:30;background:var(--bg2);
+         border-bottom:1px solid var(--line);
+         display:flex;align-items:center;gap:14px;padding:10px 20px;flex-wrap:wrap}
+  .brand{font-size:21px;font-weight:800;letter-spacing:.4px;white-space:nowrap}
+  .brand b{color:var(--accent)}
+  .brand small{font-weight:400;font-size:12px;color:var(--ink-soft);margin-left:7px}
+  .searchbox{flex:1;min-width:200px;max-width:520px}
+  .searchbox input{width:100%;padding:9px 16px;border-radius:999px;
+    border:1px solid var(--line);background:var(--bg);color:var(--ink);outline:none}
+  .searchbox input::placeholder{color:var(--ink-soft)}
+  .searchbox input:focus{border-color:var(--accent)}
+  .hbtn{background:var(--panel2);color:var(--ink);border:1px solid var(--line);
+    border-radius:999px;padding:7px 15px;font-size:13px;white-space:nowrap}
+  .hbtn:hover{border-color:var(--accent)}
+  .hbtn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700}
+  .who{font-size:13px;color:var(--ink-soft);white-space:nowrap}
+
+  /* ---------- layout ---------- */
+  .layout{display:grid;grid-template-columns:200px 1fr;gap:22px;
+          max-width:1180px;margin:22px auto;padding:0 16px 40px}
+  @media (max-width:760px){.layout{grid-template-columns:1fr}}
+  aside .sidebox{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
+  aside h3{margin:0 0 10px;font-size:12px;color:var(--ink-soft);letter-spacing:2px}
+  .secnav{display:flex;justify-content:space-between;align-items:center;width:100%;
+    background:none;border:none;padding:8px 10px;border-radius:9px;text-align:left;color:var(--ink)}
+  .secnav:hover{background:var(--panel2)}
+  .secnav .cnt{font-size:12px;color:var(--ink-soft)}
+
+  /* ---------- sections & cards ---------- */
+  .secblock{margin-bottom:30px}
+  .sechead{display:flex;align-items:center;gap:10px;margin:0 0 12px}
+  .sechead h2{margin:0;font-size:18px}
+  .sechead .cnt{color:var(--ink-soft);font-size:13px}
+  .sechead .ops{margin-left:auto;display:flex;gap:6px}
+  .mini{background:none;border:1px solid var(--line);border-radius:999px;
+    padding:3px 12px;font-size:12px;color:var(--ink-soft)}
+  .mini:hover{border-color:var(--accent);color:var(--accent)}
+  .mini.del:hover{border-color:var(--danger);color:var(--danger)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+        padding:14px;display:flex;flex-direction:column;gap:8px}
+  .card:hover{border-color:var(--accent)}
+  .card .top{display:flex;align-items:center;gap:10px}
+  .tile{width:38px;height:38px;border-radius:10px;background:var(--panel2);
+        display:flex;align-items:center;justify-content:center;overflow:hidden;flex:none}
+  .tile img{width:24px;height:24px}
+  .tile .letter{font-size:18px;font-weight:800;color:var(--accent)}
+  .card .name{font-weight:700;font-size:15px;word-break:break-all}
+  .card .desc{font-size:13px;color:var(--ink-soft);line-height:1.5;min-height:20px;word-break:break-word}
+  .card .host{font-size:12px;color:var(--ink-soft);word-break:break-all}
+  .card .status{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-soft)}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--unknown);flex:none}
+  .dot.up{background:var(--ok)} .dot.down{background:var(--bad)}
+  .dot.checking{background:var(--accent)}
+  .card .ops{display:flex;gap:6px;margin-top:auto;flex-wrap:wrap}
+  .card a.open{color:var(--accent);text-decoration:none;font-size:12px;
+    border:1px solid var(--line);border-radius:999px;padding:3px 12px}
+  .card a.open:hover{border-color:var(--accent)}
+  .empty{color:var(--ink-soft);text-align:center;padding:38px 0;line-height:1.9}
+
+  .banner{background:#3a2f10;border:1px solid #8a6d1f;color:#f5d67a;border-radius:12px;
+    padding:10px 14px;margin-bottom:16px;font-size:13px}
+  .banner button{margin-left:8px;border:1px solid #8a6d1f;background:transparent;color:#f5d67a;
+    border-radius:999px;padding:2px 12px}
+  .banner input{background:var(--bg);border:1px solid var(--line);border-radius:8px;
+    padding:4px 8px;color:var(--ink)}
+
+  /* ---------- modal ---------- */
+  .mask{position:fixed;inset:0;background:rgba(5,8,16,.65);z-index:50;
+        display:flex;align-items:center;justify-content:center;padding:16px}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:16px;
+         padding:22px;width:420px;max-width:100%}
+  .modal h3{margin:0 0 6px;font-size:17px}
+  .modal label{display:block;font-size:13px;margin:12px 0 5px;color:var(--ink-soft)}
+  .modal input,.modal textarea,.modal select{width:100%;padding:9px 12px;
+    border:1px solid var(--line);border-radius:10px;background:var(--bg);outline:none}
+  .modal .row{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+  .modal .err{color:var(--danger);font-size:13px;min-height:18px;margin-top:8px}
+
+  /* ---------- auth ---------- */
+  .auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+  .auth-card{background:var(--panel);border:1px solid var(--line);border-radius:18px;
+    padding:30px 28px;width:340px}
+  .auth-card h1{margin:0 0 4px;font-size:24px}
+  .auth-card h1 b{color:var(--accent)}
+  .auth-card p.sub{margin:0 0 18px;color:var(--ink-soft);font-size:13px}
+  .auth-card label{display:block;font-size:13px;margin:12px 0 5px;color:var(--ink-soft)}
+  .auth-card input{width:100%;padding:9px 12px;border:1px solid var(--line);
+    border-radius:10px;background:var(--bg);outline:none}
+  .auth-card button.go{width:100%;margin-top:18px;background:var(--accent);color:var(--accent-ink);
+    border:none;border-radius:999px;padding:10px;font-weight:700}
+  .err{color:var(--danger);font-size:13px;min-height:18px;margin-top:8px}
+</style>
+</head>
+<body>
+
+<!-- login view -->
+<div id="authView" class="auth-wrap hidden">
+  <form class="auth-card" id="loginForm">
+    <h1>start<b>deck</b></h1>
+    <p class="sub">你的个人起始页 —— 常用站点，一屏直达</p>
+    <label>用户名</label>
+    <input id="loginUser" autocomplete="username" required>
+    <label>密码</label>
+    <input id="loginPass" type="password" autocomplete="current-password" required>
+    <div class="err" id="loginErr"></div>
+    <button class="go" type="submit">登录</button>
+  </form>
+</div>
+
+<!-- app view -->
+<div id="appView" class="hidden">
+  <header>
+    <div class="brand">start<b>deck</b><small>个人起始页</small></div>
+    <div class="searchbox"><input id="searchInput" placeholder="搜索名称、说明或网址，输入即过滤…"></div>
+    <button class="hbtn" id="addSectionBtn">＋ 新分组</button>
+    <button class="hbtn primary" id="addLinkBtn">＋ 新链接</button>
+    <button class="hbtn" id="checkAllBtn">探测全部</button>
+    <span class="who" id="whoami"></span>
+    <button class="hbtn" id="logoutBtn">退出</button>
+  </header>
+
+  <div class="layout">
+    <aside>
+      <div class="sidebox">
+        <h3>分组</h3>
+        <div id="secNav"></div>
+      </div>
+    </aside>
+    <main>
+      <div class="banner hidden" id="pwBanner">
+        你还在用初始密码，建议尽快修改。
+        <button id="pwChangeBtn" type="button">改密码</button>
+        <span id="pwForm" class="hidden">
+          <input id="pwOld" type="password" placeholder="旧密码" size="10">
+          <input id="pwNew" type="password" placeholder="新密码（至少 6 位）" size="14">
+          <button id="pwSaveBtn" type="button">保存</button>
+        </span>
+        <span id="pwMsg"></span>
+      </div>
+      <div id="board"></div>
+    </main>
+  </div>
+</div>
+
+<!-- section modal -->
+<div class="mask hidden" id="sectionModal">
+  <form class="modal" id="sectionForm">
+    <h3 id="sectionModalTitle">新分组</h3>
+    <label>分组名称</label>
+    <input id="sectionName" placeholder="例如：工作 / 影音 / 服务器" required maxlength="60">
+    <div class="err" id="sectionErr"></div>
+    <div class="row">
+      <button type="button" class="hbtn" data-close>取消</button>
+      <button type="submit" class="hbtn primary">保存</button>
+    </div>
+  </form>
+</div>
+
+<!-- link modal -->
+<div class="mask hidden" id="linkModal">
+  <form class="modal" id="linkForm">
+    <h3 id="linkModalTitle">新链接</h3>
+    <label>所属分组</label>
+    <select id="linkSection"></select>
+    <label>名称</label>
+    <input id="linkName" placeholder="例如：公司邮箱" required maxlength="100">
+    <label>网址</label>
+    <input id="linkUrl" placeholder="https://…" required>
+    <label>说明（可选）</label>
+    <textarea id="linkDesc" rows="2" maxlength="500" placeholder="一句话说明这个站是干什么的"></textarea>
+    <div class="err" id="linkErr"></div>
+    <div class="row">
+      <button type="button" class="hbtn" data-close>取消</button>
+      <button type="submit" class="hbtn primary">保存</button>
+    </div>
+  </form>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let token = localStorage.getItem("sd_token") || "";
+let sections = [];            // [{id, name, links:[...]}]
+let statuses = {};            // linkId -> {up, response_ms, status_code, error, checking}
+let query = "";
+let editingSectionId = null;
+let editingLinkId = null;
+
+function api(path, opts = {}) {
+  return fetch(path, {
+    ...opts,
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token, ...(opts.headers || {}) },
+  }).then(async (res) => {
+    if (res.status === 401) { showAuth(); throw new Error("unauthorized"); }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || ("HTTP " + res.status));
+    return data;
+  });
+}
+
+function showAuth() {
+  token = ""; localStorage.removeItem("sd_token");
+  $("appView").classList.add("hidden");
+  $("authView").classList.remove("hidden");
+}
+function showApp(username) {
+  $("authView").classList.add("hidden");
+  $("appView").classList.remove("hidden");
+  $("whoami").textContent = username;
+}
+
+$("loginForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("loginErr").textContent = "";
+  try {
+    const res = await fetch("/api/login", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: $("loginUser").value.trim(), password: $("loginPass").value }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || "登录失败");
+    token = data.token; localStorage.setItem("sd_token", token);
+    showApp(data.username);
+    $("pwBanner").classList.toggle("hidden", !data.must_change_password);
+    await refresh();
+    runCheckAll();  // 打开页面即探测一轮
+  } catch (err) { $("loginErr").textContent = err.message; }
+});
+
+$("logoutBtn").addEventListener("click", async () => {
+  try { await api("/api/logout", { method: "POST" }); } catch (e) {}
+  showAuth();
+});
+
+$("pwChangeBtn").addEventListener("click", () => $("pwForm").classList.toggle("hidden"));
+$("pwSaveBtn").addEventListener("click", async () => {
+  try {
+    await api("/api/change-password", {
+      method: "POST",
+      body: JSON.stringify({ old_password: $("pwOld").value, new_password: $("pwNew").value }),
+    });
+    $("pwMsg").textContent = "已修改，下次登录用新密码。";
+    $("pwForm").classList.add("hidden");
+  } catch (err) { $("pwMsg").textContent = err.message; }
+});
+
+/* ---------- rendering ---------- */
+function esc(s) {
+  return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+function hostOf(url) { try { return new URL(url).host; } catch (e) { return url; } }
+function matchQuery(link) {
+  if (!query) return true;
+  const q = query.toLowerCase();
+  return link.name.toLowerCase().includes(q)
+      || (link.description || "").toLowerCase().includes(q)
+      || link.url.toLowerCase().includes(q);
+}
+function statusHtml(link) {
+  const st = statuses[link.id];
+  if (!st) return '<span class="dot"></span><span>未探测</span>';
+  if (st.checking) return '<span class="dot checking"></span><span>探测中…</span>';
+  if (st.up) return `<span class="dot up"></span><span>通 · ${st.response_ms} ms</span>`;
+  return `<span class="dot down"></span><span>不通${st.error ? " · " + esc(st.error) : ""}</span>`;
+}
+
+function render() {
+  // sidebar nav
+  const nav = $("secNav");
+  nav.innerHTML = "";
+  sections.forEach((s) => {
+    const b = document.createElement("button");
+    b.className = "secnav";
+    b.innerHTML = `<span></span><span class="cnt">${s.links.length}</span>`;
+    b.querySelector("span").textContent = s.name;
+    b.addEventListener("click", () => {
+      const el = document.getElementById("sec-" + s.id);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    nav.appendChild(b);
+  });
+
+  const board = $("board");
+  board.innerHTML = "";
+  if (!sections.length) {
+    board.innerHTML = '<div class="empty">还没有任何分组。<br>点右上角「＋ 新分组」建第一个分组，再往里加链接。</div>';
+    return;
+  }
+  let anyVisible = false;
+  sections.forEach((s) => {
+    const visible = s.links.filter(matchQuery);
+    if (query && !visible.length) return;
+    anyVisible = true;
+    const block = document.createElement("div");
+    block.className = "secblock"; block.id = "sec-" + s.id;
+    block.innerHTML = `
+      <div class="sechead">
+        <h2>${esc(s.name)}</h2><span class="cnt">${s.links.length} 个链接</span>
+        <span class="ops">
+          <button class="mini" data-act="add">＋ 链接</button>
+          <button class="mini" data-act="rename">改名</button>
+          <button class="mini del" data-act="del">删除分组</button>
+        </span>
+      </div>
+      <div class="grid"></div>`;
+    block.querySelector('[data-act="add"]').addEventListener("click", () => openLinkModal(null, s.id));
+    block.querySelector('[data-act="rename"]').addEventListener("click", () => openSectionModal(s));
+    block.querySelector('[data-act="del"]').addEventListener("click", async () => {
+      if (!confirm(`删除分组「${s.name}」？分组里的 ${s.links.length} 个链接会一起删除。`)) return;
+      await api(`/api/sections/${s.id}`, { method: "DELETE" });
+      refresh();
+    });
+    const grid = block.querySelector(".grid");
+    if (!visible.length) {
+      grid.innerHTML = '<div class="empty" style="grid-column:1/-1">这个分组还没有链接，点上面「＋ 链接」加一个。</div>';
+    }
+    visible.forEach((link) => grid.appendChild(cardEl(link)));
+    board.appendChild(block);
+  });
+  if (query && !anyVisible) {
+    board.innerHTML = '<div class="empty">没有匹配「' + esc(query) + '」的链接。</div>';
+  }
+}
+
+function cardEl(link) {
+  const card = document.createElement("div");
+  card.className = "card";
+  card.innerHTML = `
+    <div class="top">
+      <div class="tile"><span class="letter">${esc((link.name || "?").trim().charAt(0) || "?")}</span></div>
+      <div class="name">${esc(link.name)}</div>
+    </div>
+    <div class="desc">${esc(link.description || "")}</div>
+    <div class="host">${esc(hostOf(link.url))}</div>
+    <div class="status">${statusHtml(link)}</div>
+    <div class="ops">
+      <a class="open" href="${esc(link.url)}" target="_blank" rel="noopener">打开</a>
+      <button class="mini" data-act="check">探测</button>
+      <button class="mini" data-act="edit">编辑</button>
+      <button class="mini del" data-act="del">删除</button>
+    </div>`;
+  const tile = card.querySelector(".tile");
+  if (link.icon_url) {
+    const img = document.createElement("img");
+    img.alt = ""; img.loading = "lazy";
+    img.addEventListener("error", () => img.remove());  // 取不到图标就留首字占位
+    img.src = link.icon_url;
+    tile.appendChild(img);
+    tile.querySelector(".letter").classList.add("hidden");
+    img.addEventListener("load", () => tile.querySelector(".letter")?.remove());
+  }
+  card.querySelector('[data-act="check"]').addEventListener("click", () => runCheckOne(link.id));
+  card.querySelector('[data-act="edit"]').addEventListener("click", () => openLinkModal(link));
+  card.querySelector('[data-act="del"]').addEventListener("click", async () => {
+    if (!confirm(`删除链接「${link.name}」？`)) return;
+    await api(`/api/links/${link.id}`, { method: "DELETE" });
+    delete statuses[link.id];
+    refresh();
+  });
+  return card;
+}
+
+/* ---------- data ---------- */
+async function refresh() {
+  sections = await api("/api/sections");
+  render();
+}
+
+async function runCheckOne(linkId) {
+  statuses[linkId] = { checking: true };
+  render();
+  try {
+    const r = await api(`/api/links/${linkId}/check`, { method: "POST" });
+    statuses[linkId] = r;
+  } catch (e) {
+    statuses[linkId] = { up: false, error: e.message };
+  }
+  render();
+}
+
+async function runCheckAll() {
+  const ids = sections.flatMap((s) => s.links.map((l) => l.id));
+  ids.forEach((id) => { statuses[id] = { checking: true }; });
+  render();
+  try {
+    const results = await api("/api/check-all", { method: "POST" });
+    results.forEach((r) => { statuses[r.link_id] = r; });
+  } catch (e) { /* 状态点保持灰色即可 */ }
+  render();
+}
+$("checkAllBtn").addEventListener("click", runCheckAll);
+
+$("searchInput").addEventListener("input", (e) => { query = e.target.value.trim(); render(); });
+
+/* ---------- modals ---------- */
+function closeModals() {
+  $("sectionModal").classList.add("hidden");
+  $("linkModal").classList.add("hidden");
+}
+document.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", closeModals));
+
+function openSectionModal(section) {
+  editingSectionId = section ? section.id : null;
+  $("sectionModalTitle").textContent = section ? "分组改名" : "新分组";
+  $("sectionName").value = section ? section.name : "";
+  $("sectionErr").textContent = "";
+  $("sectionModal").classList.remove("hidden");
+  $("sectionName").focus();
+}
+$("addSectionBtn").addEventListener("click", () => openSectionModal(null));
+$("sectionForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    const body = JSON.stringify({ name: $("sectionName").value });
+    if (editingSectionId) await api(`/api/sections/${editingSectionId}`, { method: "PUT", body });
+    else await api("/api/sections", { method: "POST", body });
+    closeModals();
+    refresh();
+  } catch (err) { $("sectionErr").textContent = err.message; }
+});
+
+function fillSectionOptions(selectedId) {
+  const sel = $("linkSection");
+  sel.innerHTML = "";
+  sections.forEach((s) => {
+    const o = document.createElement("option");
+    o.value = s.id; o.textContent = s.name;
+    if (s.id === selectedId) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+function openLinkModal(link, presetSectionId) {
+  if (!sections.length) { alert("先建一个分组，再往里面加链接。"); return; }
+  editingLinkId = link ? link.id : null;
+  $("linkModalTitle").textContent = link ? "编辑链接" : "新链接";
+  fillSectionOptions(link ? link.section_id : presetSectionId);
+  $("linkName").value = link ? link.name : "";
+  $("linkUrl").value = link ? link.url : "";
+  $("linkDesc").value = link ? (link.description || "") : "";
+  $("linkErr").textContent = "";
+  $("linkModal").classList.remove("hidden");
+  $("linkName").focus();
+}
+$("addLinkBtn").addEventListener("click", () => openLinkModal(null, sections[0]?.id));
+$("linkForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    const payload = {
+      section_id: Number($("linkSection").value),
+      name: $("linkName").value,
+      url: $("linkUrl").value,
+      description: $("linkDesc").value,
+    };
+    if (editingLinkId) await api(`/api/links/${editingLinkId}`, { method: "PUT", body: JSON.stringify(payload) });
+    else await api("/api/links", { method: "POST", body: JSON.stringify(payload) });
+    closeModals();
+    refresh();
+  } catch (err) { $("linkErr").textContent = err.message; }
+});
+
+/* ---------- boot ---------- */
+(async () => {
+  if (!token) { showAuth(); return; }
+  try {
+    const me = await api("/api/me");
+    showApp(me.username);
+    $("pwBanner").classList.toggle("hidden", !me.must_change_password);
+    await refresh();
+    runCheckAll();
+  } catch (e) { showAuth(); }
+})();
+</script>
+</body>
+</html>
