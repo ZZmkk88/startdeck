@@ -62,7 +62,8 @@ def do_login(client, password="admin123"):
     return res.json()
 
 
-@pytest.fixture(scope="module")
+# 每个用例独立登录：改密会作废同用户的其他会话，用例之间不能共用 token
+@pytest.fixture(scope="function")
 def auth(client):
     data = do_login(client)
     return {"Authorization": f"Bearer {data['token']}"}
@@ -119,6 +120,31 @@ def test_change_password(client, auth):
         "/api/change-password",
         json={"old_password": "newpass456", "new_password": "admin123"},
         headers={"Authorization": f"Bearer {token2}"},
+    )
+    assert res.status_code == 200
+
+
+def test_change_password_revokes_other_sessions(client):
+    token_a = do_login(client)["token"]
+    token_b = do_login(client)["token"]
+    ha = {"Authorization": f"Bearer {token_a}"}
+    hb = {"Authorization": f"Bearer {token_b}"}
+    assert client.get("/api/me", headers=ha).status_code == 200
+    assert client.get("/api/me", headers=hb).status_code == 200
+    res = client.post(
+        "/api/change-password",
+        json={"old_password": "admin123", "new_password": "temp999"},
+        headers=ha,
+    )
+    assert res.status_code == 200, res.text
+    # 本次会话继续有效，其他会话被作废
+    assert client.get("/api/me", headers=ha).status_code == 200
+    assert client.get("/api/me", headers=hb).status_code == 401
+    # 恢复密码
+    res = client.post(
+        "/api/change-password",
+        json={"old_password": "temp999", "new_password": "admin123"},
+        headers=ha,
     )
     assert res.status_code == 200
 

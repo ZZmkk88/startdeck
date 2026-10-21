@@ -270,17 +270,28 @@ def logout(request: Request, user: sqlite3.Row = Depends(current_user)):
 
 
 @app.post("/api/change-password")
-def change_password(body: ChangePasswordIn, user: sqlite3.Row = Depends(current_user)):
+def change_password(
+    body: ChangePasswordIn,
+    request: Request,
+    user: sqlite3.Row = Depends(current_user),
+):
     if len(body.new_password) < 6:
         raise HTTPException(status_code=400, detail="新密码至少 6 位")
     if hash_password(body.old_password, user["salt"]) != user["password_hash"]:
         raise HTTPException(status_code=400, detail="旧密码不正确")
     salt = secrets.token_hex(16)
+    # 密码变了，之前发出去的其他登录态必须作废，只保留当前这一次会话
+    auth = request.headers.get("Authorization", "")
+    current_token = auth[len("Bearer "):].strip() if auth.startswith("Bearer ") else ""
     with get_conn() as conn:
         conn.execute(
             "UPDATE users SET password_hash = ?, salt = ?,"
             " must_change_password = 0 WHERE id = ?",
             (hash_password(body.new_password, salt), salt, user["id"]),
+        )
+        conn.execute(
+            "DELETE FROM sessions WHERE user_id = ? AND token != ?",
+            (user["id"], current_token),
         )
     return {"ok": True}
 
